@@ -57,4 +57,20 @@ defmodule ElvenGard.Spatial.Grid2D.ServerTest do
              :second
            ]
   end
+
+  test "publishes an initial grid when the server starts" do
+    server =
+      start_supervised!(
+        {Server,
+         cell_size: 50,
+         initial_entries: [
+           {:player, AABB.from_circle(100, 0, 5), :actors},
+           {:wall, AABB.new(190, -10, 210, 10), :obstacles}
+         ]}
+      )
+
+    assert Server.size(server) == 2
+    assert Server.query_circle(server, {100, 0}, 10, layers: :actors) == [:player]
+    assert Server.query_circle(server, {200, 0}, 20, layers: :obstacles) == [:wall]
+  end
 end

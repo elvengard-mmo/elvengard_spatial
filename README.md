@@ -46,8 +46,9 @@ PID with systems that require spatial candidates:
 ```
 
 Queries are synchronous and observe a complete grid before or after each
-update. Use `replace_all/2` when rebuilding an index after a room starts, then
-maintain it with `put/4`, `put_many/2`, and `delete/2`.
+update. Pass `initial_entries: entries` to publish a rebuilt index atomically
+when its server starts. Use `replace_all/2` for later full rebuilds, then
+maintain the index with `put/4`, `put_many/2`, and `delete/2`.
 
 ## ECS queries
 
