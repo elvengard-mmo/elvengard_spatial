@@ -4,7 +4,9 @@ defmodule ElvenGard.Spatial.Grid2D.Server do
 
   Writes and queries are synchronous so a query always observes either the
   complete grid before an update or the complete grid after it. This process is
-  suitable for a derived spatial index owned by one game partition.
+  suitable for a derived spatial index owned by one game partition. The
+  `:initial_entries` option builds the complete grid before the registered
+  server becomes available to callers.
   """
 
   use GenServer
@@ -82,7 +84,8 @@ defmodule ElvenGard.Spatial.Grid2D.Server do
 
   @impl true
   def init(opts) do
-    {:ok, Grid2D.new(opts)}
+    {initial_entries, grid_opts} = Keyword.pop(opts, :initial_entries, [])
+    {:ok, grid_opts |> Grid2D.new() |> Grid2D.put_many(initial_entries)}
   end
 
   @impl true
