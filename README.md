@@ -27,6 +27,21 @@ candidates =
 `candidates` contains broad-phase candidates only. The caller must still run
 its exact collision test before applying game rules.
 
+## Installation
+
+Until the package is published to Hex, point the dependency at `main`:
+
+```elixir
+def deps() do
+  [
+    {:elvengard_spatial,
+     github: "elvengard-mmo/elvengard_spatial", branch: "main"}
+  ]
+end
+```
+
+The library has no runtime dependencies and supports Elixir 1.15 or newer.
+
 ## Benchmarks
 
 Run the deterministic exhaustive-scan comparison with:
@@ -37,3 +52,12 @@ mix run bench/grid_2d.exs
 
 The benchmark verifies that every indexed query returns exactly the same AABB
 candidates as a full scan before reporting timings.
+
+## Design contract
+
+- Entity identifiers are opaque Erlang terms.
+- Index updates are immutable and unchanged bounds are no-ops.
+- Layers only filter broad-phase candidates.
+- Query results use Erlang term ordering for deterministic simulations.
+- Circle and swept-circle queries return AABB candidates and may contain false
+  positives, but never discard an intersecting AABB.
