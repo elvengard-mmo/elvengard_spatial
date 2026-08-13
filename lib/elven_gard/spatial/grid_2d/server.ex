@@ -13,6 +13,8 @@ defmodule ElvenGard.Spatial.Grid2D.Server do
 
   alias ElvenGard.Spatial.{AABB, Grid2D}
 
+  @type query_key :: any()
+
   ## Public API
 
   @spec start_link(Keyword.t()) :: GenServer.on_start()
@@ -57,6 +59,15 @@ defmodule ElvenGard.Spatial.Grid2D.Server do
   @spec query_aabb(GenServer.server(), AABB.t(), Keyword.t()) :: [Grid2D.id()]
   def query_aabb(server, %AABB{} = bounds, opts \\ []) do
     GenServer.call(server, {:query_aabb, bounds, opts})
+  end
+
+  @spec query_aabbs(
+          GenServer.server(),
+          [{query_key(), AABB.t()}],
+          Keyword.t()
+        ) :: [{query_key(), [Grid2D.id()]}]
+  def query_aabbs(server, queries, opts \\ []) when is_list(queries) do
+    GenServer.call(server, {:query_aabbs, queries, opts})
   end
 
   @spec query_circle(
@@ -117,6 +128,13 @@ defmodule ElvenGard.Spatial.Grid2D.Server do
 
   def handle_call({:query_aabb, bounds, opts}, _from, grid) do
     {:reply, Grid2D.query_aabb(grid, bounds, opts), grid}
+  end
+
+  def handle_call({:query_aabbs, queries, opts}, _from, grid) do
+    results =
+      Enum.map(queries, fn {key, bounds} -> {key, Grid2D.query_aabb(grid, bounds, opts)} end)
+
+    {:reply, results, grid}
   end
 
   def handle_call({:query_circle, center, radius, opts}, _from, grid) do

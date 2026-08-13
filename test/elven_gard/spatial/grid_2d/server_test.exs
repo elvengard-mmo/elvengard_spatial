@@ -73,4 +73,30 @@ defmodule ElvenGard.Spatial.Grid2D.ServerTest do
     assert Server.query_circle(server, {100, 0}, 10, layers: :actors) == [:player]
     assert Server.query_circle(server, {200, 0}, 20, layers: :obstacles) == [:wall]
   end
+
+  test "resolves many named bounds through one serialized query" do
+    server = start_supervised!({Server, cell_size: 50})
+
+    :ok =
+      Server.put_many(server, [
+        {:left, AABB.from_circle(-100, 0, 5), :actors},
+        {:middle, AABB.from_circle(0, 0, 5), :actors},
+        {:right, AABB.from_circle(100, 0, 5), :actors},
+        {:wall, AABB.from_circle(0, 0, 5), :obstacles}
+      ])
+
+    assert Server.query_aabbs(
+             server,
+             [
+               {:western_view, AABB.new(-120, -20, 20, 20)},
+               {:eastern_view, AABB.new(-20, -20, 120, 20)},
+               {:empty_view, AABB.new(500, 500, 600, 600)}
+             ],
+             layers: :actors
+           ) == [
+             western_view: [:left, :middle],
+             eastern_view: [:middle, :right],
+             empty_view: []
+           ]
+  end
 end
