@@ -26,3 +26,14 @@ candidates =
 
 `candidates` contains broad-phase candidates only. The caller must still run
 its exact collision test before applying game rules.
+
+## Benchmarks
+
+Run the deterministic exhaustive-scan comparison with:
+
+```shell
+mix run bench/grid_2d.exs
+```
+
+The benchmark verifies that every indexed query returns exactly the same AABB
+candidates as a full scan before reporting timings.
