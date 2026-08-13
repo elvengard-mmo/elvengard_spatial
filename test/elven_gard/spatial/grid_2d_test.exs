@@ -28,6 +28,14 @@ defmodule ElvenGard.Spatial.Grid2DTest do
     assert Grid2D.fetch(grid, :player) == {:ok, AABB.new(990, 990, 1_010, 1_010)}
   end
 
+  test "returns the existing grid when indexed bounds and layers are unchanged" do
+    grid =
+      Grid2D.new()
+      |> Grid2D.put(:player, AABB.from_circle(0, 0, 10), layers: :players)
+
+    assert Grid2D.put(grid, :player, AABB.from_circle(0, 0, 10), layers: :players) === grid
+  end
+
   test "deletes entities and empty cells" do
     grid =
       Grid2D.new()

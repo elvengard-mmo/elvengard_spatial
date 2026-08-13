@@ -55,16 +55,14 @@ defmodule ElvenGard.Spatial.Grid2D do
   @spec put(t(), id(), AABB.t(), Keyword.t()) :: t()
   def put(%__MODULE__{} = grid, id, %AABB{} = bounds, opts \\ []) do
     layers = opts |> Keyword.get(:layers, []) |> normalize_layers()
-    cells_for_entry = occupied_cells(grid, bounds)
-    grid = delete(grid, id)
 
-    cells =
-      Enum.reduce(cells_for_entry, grid.cells, fn cell, cells ->
-        Map.update(cells, cell, MapSet.new([id]), &MapSet.put(&1, id))
-      end)
+    case Map.get(grid.entries, id) do
+      %Entry{bounds: ^bounds, layers: ^layers} ->
+        grid
 
-    entry = %Entry{bounds: bounds, layers: layers, cells: cells_for_entry}
-    %{grid | cells: cells, entries: Map.put(grid.entries, id, entry)}
+      _entry ->
+        replace_entry(grid, id, bounds, layers)
+    end
   end
 
   @spec put_many(t(), [put_entry()]) :: t()
@@ -131,8 +129,24 @@ defmodule ElvenGard.Spatial.Grid2D do
     grid
     |> occupied_cells(bounds)
     |> Enum.reduce(MapSet.new(), fn cell, candidates ->
-      MapSet.union(candidates, Map.get(grid.cells, cell, MapSet.new()))
+      case Map.fetch(grid.cells, cell) do
+        {:ok, ids} -> MapSet.union(candidates, ids)
+        :error -> candidates
+      end
     end)
+  end
+
+  defp replace_entry(grid, id, bounds, layers) do
+    cells_for_entry = occupied_cells(grid, bounds)
+    grid = delete(grid, id)
+
+    cells =
+      Enum.reduce(cells_for_entry, grid.cells, fn cell, cells ->
+        Map.update(cells, cell, MapSet.new([id]), &MapSet.put(&1, id))
+      end)
+
+    entry = %Entry{bounds: bounds, layers: layers, cells: cells_for_entry}
+    %{grid | cells: cells, entries: Map.put(grid.entries, id, entry)}
   end
 
   defp delete_from_cell(cells, cell, id) do
