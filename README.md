@@ -49,6 +49,35 @@ Queries are synchronous and observe a complete grid before or after each
 update. Use `replace_all/2` when rebuilding an index after a room starts, then
 maintain it with `put/4`, `put_many/2`, and `delete/2`.
 
+## ECS queries
+
+The optional `elvengard_ecs` integration exposes spatial candidate sources:
+
+```elixir
+source =
+  ElvenGard.Spatial.ECS.QuerySource.circle(
+    index,
+    room_partition,
+    {100, 200},
+    500,
+    layers: :players
+  )
+
+nearby =
+  {ElvenGard.ECS.Entity, Position, Combat}
+  |> ElvenGard.ECS.Query.select(
+    with: :selected,
+    partition: room_partition,
+    source: source
+  )
+  |> ElvenGard.ECS.Query.all()
+```
+
+The grid supplies candidate IDs before Mnesia loads the selected components.
+`ElvenGard.Spatial.ECS.Indexer.sync/5` applies a committed ECS change set to
+the grid in one incremental batch. The application supplies the indexed
+component and a projector that returns `{bounds, layers}`.
+
 ## Installation
 
 Until the package is published to Hex, point the dependency at `main`:
@@ -62,7 +91,9 @@ def deps() do
 end
 ```
 
-The library has no runtime dependencies and supports Elixir 1.15 or newer.
+The spatial core has no runtime dependencies and supports Elixir 1.15 or
+newer. The optional ECS integration is available when the consuming project
+also depends on `elvengard_ecs`.
 
 ## Benchmarks
 

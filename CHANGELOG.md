@@ -7,3 +7,4 @@
 - Add deterministic layer filtering and batch updates.
 - Add exhaustive-scan comparison benchmarks.
 - Add a supervised `Grid2D.Server` for serialized partition-owned indexes.
+- Add optional ECS query sources and incremental change-set indexing.

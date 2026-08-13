@@ -16,7 +16,8 @@ defmodule ElvenGard.Spatial.MixProject do
       start_permanent: Mix.env() == :prod,
       elixirc_options: [warnings_as_errors: true],
       aliases: aliases(),
-      deps: []
+      elixirc_paths: elixirc_paths(Mix.env()),
+      deps: deps()
     ]
   end
 
@@ -25,6 +26,15 @@ defmodule ElvenGard.Spatial.MixProject do
   end
 
   ## Private functions
+
+  defp elixirc_paths(:test), do: ["lib", "test/support"]
+  defp elixirc_paths(_environment), do: ["lib"]
+
+  defp deps() do
+    [
+      {:elvengard_ecs, github: "elvengard-mmo/elvengard_ecs", branch: "main", optional: true}
+    ]
+  end
 
   defp aliases() do
     [

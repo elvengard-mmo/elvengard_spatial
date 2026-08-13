@@ -41,6 +41,12 @@ defmodule ElvenGard.Spatial.Grid2D.Server do
     GenServer.call(server, {:replace_all, entries})
   end
 
+  @spec apply_changes(GenServer.server(), [Grid2D.put_entry()], [Grid2D.id()]) :: :ok
+  def apply_changes(server, put_entries, deleted_ids)
+      when is_list(put_entries) and is_list(deleted_ids) do
+    GenServer.call(server, {:apply_changes, put_entries, deleted_ids})
+  end
+
   @spec delete(GenServer.server(), Grid2D.id()) :: :ok
   def delete(server, id) do
     GenServer.call(server, {:delete, id})
@@ -95,6 +101,11 @@ defmodule ElvenGard.Spatial.Grid2D.Server do
   def handle_call({:replace_all, entries}, _from, grid) do
     new_grid = Grid2D.put_many(Grid2D.new(cell_size: grid.cell_size), entries)
     {:reply, :ok, new_grid}
+  end
+
+  def handle_call({:apply_changes, put_entries, deleted_ids}, _from, grid) do
+    grid = Enum.reduce(deleted_ids, grid, &Grid2D.delete(&2, &1))
+    {:reply, :ok, Grid2D.put_many(grid, put_entries)}
   end
 
   def handle_call({:delete, id}, _from, grid) do

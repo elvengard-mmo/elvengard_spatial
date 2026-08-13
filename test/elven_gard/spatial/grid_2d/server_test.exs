@@ -18,8 +18,18 @@ defmodule ElvenGard.Spatial.Grid2D.ServerTest do
     assert Server.query_circle(server, {0, 0}, 20, layers: :players) == []
     assert Server.query_circle(server, {1_000, 1_000}, 20, layers: :players) == [:player]
 
-    :ok = Server.delete(server, :player)
+    :ok =
+      Server.apply_changes(
+        server,
+        [{:replacement, AABB.from_circle(1_100, 1_000, 10), :players}],
+        [:player]
+      )
+
     assert Server.query_circle(server, {1_000, 1_000}, 20, layers: :players) == []
+    assert Server.query_circle(server, {1_100, 1_000}, 20, layers: :players) == [:replacement]
+
+    :ok = Server.delete(server, :replacement)
+    assert Server.size(server) == 1
   end
 
   test "atomically replaces the complete grid" do
