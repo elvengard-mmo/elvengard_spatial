@@ -115,6 +115,35 @@ defmodule ElvenGard.Spatial.ECS.IndexerTest do
     assert candidates(server, partition, {0, 0}) == []
   end
 
+  test "skips changes that cannot affect the index without mutating an existing entry" do
+    partition = make_ref()
+    server = start_supervised!({Server, cell_size: 100})
+
+    spec =
+      Entity.entity_spec(
+        partition: partition,
+        components: [%TestPosition{x: 100.0, y: 100.0}]
+      )
+
+    {:ok, {entity, _components}} = Command.spawn_entity(spec)
+    on_exit(fn -> Command.despawn_entity(entity) end)
+    :ok = Server.put(server, entity.id, AABB.from_circle(100, 100, 10), layers: :actors)
+
+    replace =
+      Multi.replace_component(
+        Multi.new(),
+        :replace,
+        entity,
+        %TestPosition{x: 1_000.0, y: 1_000.0}
+      )
+
+    {:ok, _results, changes} = Command.transact_with_changes(replace)
+    :ok = Indexer.sync(server, changes, TestPosition, fn _entity, _position -> :skip end)
+
+    assert candidates(server, partition, {100, 100}) == [entity.id]
+    assert candidates(server, partition, {1_000, 1_000}) == []
+  end
+
   test "ignores unrelated changes and rejects invalid indexed state" do
     partition = make_ref()
     server = start_supervised!({Server, cell_size: 100})

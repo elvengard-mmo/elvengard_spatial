@@ -4,16 +4,17 @@ if Code.ensure_loaded?(ElvenGard.ECS.ChangeSet) do
     Applies one committed ECS change set to a spatial index incrementally.
 
     The indexed component must be single-valued per entity. A projector converts
-    that component into spatial bounds and layers, or returns `:ignore` to keep
-    the entity outside the index. All resulting mutations are applied to the
-    index server in one serialized call.
+    that component into spatial bounds and layers, returns `:ignore` to remove
+    the entity from the index, or returns `:skip` when the change cannot affect
+    this index. All resulting mutations are applied to the index server in one
+    serialized call.
     """
 
     alias ElvenGard.ECS.{ChangeSet, Component, Entity, Query}
     alias ElvenGard.Spatial.AABB
     alias ElvenGard.Spatial.Grid2D.Server
 
-    @type projection :: :ignore | {AABB.t(), atom() | [atom()]}
+    @type projection :: :ignore | :skip | {AABB.t(), atom() | [atom()]}
     @type projector :: (Entity.t(), Component.t() -> projection())
     @type operation :: :delete | {:put, AABB.t(), atom() | [atom()]}
 
@@ -122,6 +123,9 @@ if Code.ensure_loaded?(ElvenGard.ECS.ChangeSet) do
 
     defp put_projection(operations, entity, component, projector) do
       case projector.(entity, component) do
+        :skip ->
+          operations
+
         :ignore ->
           Map.put(operations, entity.id, :delete)
 
