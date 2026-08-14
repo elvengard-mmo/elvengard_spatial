@@ -18,7 +18,8 @@ if Code.ensure_loaded?(ElvenGard.ECS.Query.Source) do
 
     @type center :: {number(), number()}
     @type shape ::
-            {:aabb, AABB.t()}
+            :all
+            | {:aabb, AABB.t()}
             | {:circle, center(), non_neg_integer() | float()}
             | {:swept_circle, center(), center(), non_neg_integer() | float()}
 
@@ -30,6 +31,11 @@ if Code.ensure_loaded?(ElvenGard.ECS.Query.Source) do
           }
 
     ## Public API
+
+    @spec all(GenServer.server(), Entity.partition(), Keyword.t()) :: t()
+    def all(server, partition, opts \\ []) do
+      %__MODULE__{server: server, partition: partition, shape: :all, opts: opts}
+    end
 
     @spec aabb(GenServer.server(), Entity.partition(), AABB.t(), Keyword.t()) :: t()
     def aabb(server, partition, %AABB{} = bounds, opts \\ []) do
@@ -81,6 +87,9 @@ if Code.ensure_loaded?(ElvenGard.ECS.Query.Source) do
 
     defp resolve_shape(%__MODULE__{} = source) do
       case source.shape do
+        :all ->
+          Server.ids(source.server, source.opts)
+
         {:aabb, bounds} ->
           Server.query_aabb(source.server, bounds, source.opts)
 

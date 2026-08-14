@@ -58,6 +58,19 @@ defmodule ElvenGard.Spatial.Grid2D.ServerTest do
            ]
   end
 
+  test "lists all identifiers through optional layer filtering" do
+    server = start_supervised!({Server, cell_size: 64})
+
+    :ok =
+      Server.put_many(server, [
+        {:player, AABB.from_circle(0, 0, 10), :players},
+        {:projectile, AABB.from_circle(100, 0, 4), :projectiles}
+      ])
+
+    assert Server.ids(server) == [:player, :projectile]
+    assert Server.ids(server, layers: :players) == [:player]
+  end
+
   test "publishes an initial grid when the server starts" do
     server =
       start_supervised!(

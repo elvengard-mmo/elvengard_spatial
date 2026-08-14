@@ -44,6 +44,16 @@ defmodule ElvenGard.Spatial.Grid2D do
   @spec size(t()) :: non_neg_integer()
   def size(%__MODULE__{entries: entries}), do: map_size(entries)
 
+  @spec ids(t(), Keyword.t()) :: [id()]
+  def ids(%__MODULE__{entries: entries}, opts \\ []) do
+    layers = opts |> Keyword.get(:layers, []) |> normalize_layers()
+
+    entries
+    |> Enum.filter(fn {_id, entry} -> matches_layers?(entry.layers, layers) end)
+    |> Enum.map(&elem(&1, 0))
+    |> Enum.sort()
+  end
+
   @spec fetch(t(), id()) :: {:ok, AABB.t()} | :error
   def fetch(%__MODULE__{entries: entries}, id) do
     case Map.fetch(entries, id) do

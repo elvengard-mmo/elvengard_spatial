@@ -49,6 +49,8 @@ Queries are synchronous and observe a complete grid before or after each
 update. Pass `initial_entries: entries` to publish a rebuilt index atomically
 when its server starts. Use `replace_all/2` for later full rebuilds, then
 maintain the index with `put/4`, `put_many/2`, and `delete/2`.
+`Grid2D.ids/2` and `Grid2D.Server.ids/2` return every indexed identifier,
+optionally restricted with `layers:`, without walking a synthetic world area.
 
 ## ECS queries
 
@@ -73,6 +75,10 @@ nearby =
   )
   |> ElvenGard.ECS.Query.all()
 ```
+
+Use `ElvenGard.Spatial.ECS.QuerySource.all/3` with `layers:` when a system
+needs one complete indexed category, such as every player or projectile in a
+room, but must avoid loading unrelated ECS entities.
 
 The grid supplies candidate IDs before Mnesia loads the selected components.
 `ElvenGard.Spatial.ECS.Indexer.sync/5` applies a committed ECS change set to

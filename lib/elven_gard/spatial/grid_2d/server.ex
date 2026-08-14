@@ -30,6 +30,11 @@ defmodule ElvenGard.Spatial.Grid2D.Server do
   @spec size(GenServer.server()) :: non_neg_integer()
   def size(server), do: GenServer.call(server, :size)
 
+  @spec ids(GenServer.server(), Keyword.t()) :: [Grid2D.id()]
+  def ids(server, opts \\ []) do
+    GenServer.call(server, {:ids, opts})
+  end
+
   @spec put(GenServer.server(), Grid2D.id(), AABB.t(), Keyword.t()) :: :ok
   def put(server, id, %AABB{} = bounds, opts \\ []) do
     GenServer.call(server, {:put, id, bounds, opts})
@@ -102,6 +107,10 @@ defmodule ElvenGard.Spatial.Grid2D.Server do
   @impl true
   def handle_call(:size, _from, grid) do
     {:reply, Grid2D.size(grid), grid}
+  end
+
+  def handle_call({:ids, opts}, _from, grid) do
+    {:reply, Grid2D.ids(grid, opts), grid}
   end
 
   def handle_call({:put, id, bounds, opts}, _from, grid) do

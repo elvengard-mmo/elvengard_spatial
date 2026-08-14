@@ -64,6 +64,18 @@ defmodule ElvenGard.Spatial.Grid2DTest do
            ]
   end
 
+  test "lists all indexed identifiers through optional layer filtering" do
+    grid =
+      Grid2D.new()
+      |> Grid2D.put(:player, AABB.from_circle(0, 0, 10), layers: [:actors, :players])
+      |> Grid2D.put(:projectile, AABB.from_circle(100, 0, 4), layers: :projectiles)
+      |> Grid2D.put(:bot, AABB.from_circle(200, 0, 10), layers: [:actors, :bots])
+
+    assert Grid2D.ids(grid) == [:bot, :player, :projectile]
+    assert Grid2D.ids(grid, layers: :players) == [:player]
+    assert Grid2D.ids(grid, layers: [:bots, :projectiles]) == [:bot, :projectile]
+  end
+
   test "never drops an AABB intersection across deterministic random worlds" do
     :rand.seed(:exsss, {42, 43, 44})
 

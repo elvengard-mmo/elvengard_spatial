@@ -58,6 +58,21 @@ defmodule ElvenGard.Spatial.ECS.QuerySourceTest do
     assert ElvenGard.ECS.Query.Source.resolve(swept, partition) == [:first, :second]
   end
 
+  test "supplies every candidate from selected layers without geometry" do
+    partition = make_ref()
+    server = start_supervised!({Server, cell_size: 64})
+
+    :ok =
+      Server.put_many(server, [
+        {:player, AABB.from_circle(0, 0, 10), :players},
+        {:projectile, AABB.from_circle(100, 0, 4), :projectiles}
+      ])
+
+    source = QuerySource.all(server, partition, layers: :players)
+
+    assert ElvenGard.ECS.Query.Source.resolve(source, partition) == [:player]
+  end
+
   defp spawn_entity(partition, position) do
     spec = Entity.entity_spec(partition: partition, components: [position])
     {:ok, {entity, _components}} = Command.spawn_entity(spec)
