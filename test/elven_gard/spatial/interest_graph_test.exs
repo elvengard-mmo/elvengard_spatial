@@ -1,7 +1,7 @@
 defmodule ElvenGard.Spatial.InterestGraphTest do
   use ExUnit.Case, async: true
 
-  alias ElvenGard.Spatial.InterestGraph.Delta
+  alias ElvenGard.Spatial.InterestGraph.{Delta, ViewTransition}
   alias ElvenGard.Spatial.{AABB, InterestGraph}
 
   test "maintains reciprocal edges as an entity enters and leaves an observer" do
@@ -190,5 +190,45 @@ defmodule ElvenGard.Spatial.InterestGraphTest do
     assert views == %{first: MapSet.new([:left])}
     assert InterestGraph.observer_ids(graph) == [:first]
     assert InterestGraph.recipients(graph, :right) == []
+  end
+
+  test "applies entity and observer movement as one allocation-light view transition" do
+    {graph, _deltas} =
+      InterestGraph.new(cell_size: 64)
+      |> InterestGraph.put_entities([
+        {:leaving, AABB.from_circle(0, 0, 5), :projectiles},
+        {:entering, AABB.from_circle(500, 0, 5), :projectiles}
+      ])
+
+    {graph, _views} =
+      InterestGraph.sync_observer_views(graph, [
+        {:viewer, AABB.from_circle(0, 0, 50), :projectiles}
+      ])
+
+    {graph, transitions} =
+      InterestGraph.transition_observer_views(
+        graph,
+        [
+          {:leaving, AABB.from_circle(500, 0, 5), :projectiles},
+          {:new, AABB.from_circle(500, 0, 5), :projectiles}
+        ],
+        [:entering],
+        [
+          {:viewer, AABB.from_circle(500, 0, 50), :projectiles},
+          {:new_viewer, AABB.from_circle(500, 0, 50), :projectiles}
+        ]
+      )
+
+    assert transitions.viewer == %ViewTransition{
+             previous: MapSet.new([:leaving]),
+             current: MapSet.new([:leaving, :new])
+           }
+
+    assert transitions.new_viewer == %ViewTransition{
+             previous: nil,
+             current: MapSet.new([:leaving, :new])
+           }
+
+    assert InterestGraph.visible_entities(graph, :viewer) == [:leaving, :new]
   end
 end

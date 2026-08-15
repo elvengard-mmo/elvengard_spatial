@@ -3,6 +3,7 @@ defmodule ElvenGard.Spatial.InterestGraph.ServerTest do
 
   alias ElvenGard.Spatial.Grid2D
   alias ElvenGard.Spatial.InterestGraph.Delta
+  alias ElvenGard.Spatial.InterestGraph.ViewTransition
   alias ElvenGard.Spatial.InterestGraph.Server, as: InterestServer
   alias ElvenGard.Spatial.AABB
 
@@ -152,5 +153,31 @@ defmodule ElvenGard.Spatial.InterestGraph.ServerTest do
     assert views == %{viewer: MapSet.new([:right])}
     assert InterestServer.recipients(server, :left) == []
     assert InterestServer.recipients(server, :right) == [:viewer]
+  end
+
+  test "serializes entity and observer transitions in one graph step" do
+    server =
+      start_supervised!(
+        {InterestServer,
+         initial_entries: [{:projectile, AABB.from_circle(0, 0, 5), :projectiles}]}
+      )
+
+    _views =
+      InterestServer.sync_observer_views(server, [
+        {:viewer, AABB.from_circle(0, 0, 50), :projectiles}
+      ])
+
+    transitions =
+      InterestServer.transition_observer_views(
+        server,
+        [{:projectile, AABB.from_circle(500, 0, 5), :projectiles}],
+        [],
+        [{:viewer, AABB.from_circle(500, 0, 50), :projectiles}]
+      )
+
+    assert transitions.viewer == %ViewTransition{
+             previous: MapSet.new([:projectile]),
+             current: MapSet.new([:projectile])
+           }
   end
 end
