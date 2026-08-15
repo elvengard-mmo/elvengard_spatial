@@ -144,4 +144,51 @@ defmodule ElvenGard.Spatial.InterestGraphTest do
     assert InterestGraph.observer_ids(same_graph) == [:first]
     assert InterestGraph.recipients(same_graph, :right) == []
   end
+
+  test "updates entity edges without materializing transition deltas" do
+    {graph, _delta} =
+      InterestGraph.new()
+      |> InterestGraph.put_observer(:viewer, AABB.from_circle(0, 0, 50), layers: :players)
+
+    graph =
+      InterestGraph.update_entities(
+        graph,
+        [{:player, AABB.from_circle(0, 0, 5), :players}],
+        []
+      )
+
+    assert InterestGraph.visible_entities(graph, :viewer) == [:player]
+    assert InterestGraph.recipients(graph, :player) == [:viewer]
+
+    graph = InterestGraph.update_entities(graph, [], [:player])
+
+    assert InterestGraph.visible_entities(graph, :viewer) == []
+    assert InterestGraph.recipients(graph, :player) == []
+  end
+
+  test "synchronizes observer views without sorting transition lists" do
+    {graph, _deltas} =
+      InterestGraph.new()
+      |> InterestGraph.put_entities([
+        {:left, AABB.from_circle(0, 0, 5), :players},
+        {:right, AABB.from_circle(500, 0, 5), :players}
+      ])
+
+    {graph, views} =
+      InterestGraph.sync_observer_views(graph, [
+        {:first, AABB.from_circle(0, 0, 50), :players},
+        {:stale, AABB.from_circle(500, 0, 50), :players}
+      ])
+
+    assert views == %{first: MapSet.new([:left]), stale: MapSet.new([:right])}
+
+    {graph, views} =
+      InterestGraph.sync_observer_views(graph, [
+        {:first, AABB.from_circle(0, 0, 50), :players}
+      ])
+
+    assert views == %{first: MapSet.new([:left])}
+    assert InterestGraph.observer_ids(graph) == [:first]
+    assert InterestGraph.recipients(graph, :right) == []
+  end
 end

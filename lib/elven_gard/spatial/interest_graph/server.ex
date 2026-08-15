@@ -42,6 +42,12 @@ defmodule ElvenGard.Spatial.InterestGraph.Server do
     GenServer.call(server, {:sync_observers, entries})
   end
 
+  @spec sync_observer_views(GenServer.server(), [InterestGraph.entry()]) ::
+          %{optional(InterestGraph.id()) => MapSet.t(InterestGraph.id())}
+  def sync_observer_views(server, entries) when is_list(entries) do
+    GenServer.call(server, {:sync_observer_views, entries})
+  end
+
   @spec observer_ids(GenServer.server()) :: [InterestGraph.id()]
   def observer_ids(server) do
     GenServer.call(server, :observer_ids)
@@ -104,12 +110,13 @@ defmodule ElvenGard.Spatial.InterestGraph.Server do
   end
 
   def handle_call({:put, id, bounds, opts}, _from, graph) do
-    {graph, _delta} = InterestGraph.put_entity(graph, id, bounds, opts)
+    layers = Keyword.get(opts, :layers, [])
+    graph = InterestGraph.update_entities(graph, [{id, bounds, layers}], [])
     {:reply, :ok, graph}
   end
 
   def handle_call({:put_many, entries}, _from, graph) do
-    {graph, _deltas} = InterestGraph.put_entities(graph, entries)
+    graph = InterestGraph.update_entities(graph, entries, [])
     {:reply, :ok, graph}
   end
 
@@ -118,12 +125,12 @@ defmodule ElvenGard.Spatial.InterestGraph.Server do
   end
 
   def handle_call({:apply_changes, put_entries, deleted_ids}, _from, graph) do
-    {graph, _deltas} = InterestGraph.apply_entity_changes(graph, put_entries, deleted_ids)
+    graph = InterestGraph.update_entities(graph, put_entries, deleted_ids)
     {:reply, :ok, graph}
   end
 
   def handle_call({:delete, id}, _from, graph) do
-    {graph, _delta} = InterestGraph.delete_entity(graph, id)
+    graph = InterestGraph.update_entities(graph, [], [id])
     {:reply, :ok, graph}
   end
 
@@ -162,6 +169,11 @@ defmodule ElvenGard.Spatial.InterestGraph.Server do
   def handle_call({:sync_observers, entries}, _from, graph) do
     {graph, deltas} = InterestGraph.sync_observers(graph, entries)
     {:reply, deltas, graph}
+  end
+
+  def handle_call({:sync_observer_views, entries}, _from, graph) do
+    {graph, views} = InterestGraph.sync_observer_views(graph, entries)
+    {:reply, views, graph}
   end
 
   def handle_call(:observer_ids, _from, graph) do

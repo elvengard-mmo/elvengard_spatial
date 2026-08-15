@@ -80,6 +80,11 @@ the same process without a duplicate entity grid.
 Use `InterestGraph.Server.sync_observers/2` to replace the current room
 observer set in one serialized call. Unchanged viewports reuse their existing
 edges, and observers absent from the new set are removed immediately.
+Replication paths that only need the current visibility sets can use
+`sync_observer_views/2`; it returns `MapSet` values without allocating or
+sorting transition lists. Likewise, `update_entities/3` maintains graph edges
+without materializing deltas and backs the server's `Grid2D.Server`-compatible
+entity operations.
 
 ## ECS queries
 
