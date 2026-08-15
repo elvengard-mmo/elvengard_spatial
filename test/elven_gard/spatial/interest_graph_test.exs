@@ -116,4 +116,32 @@ defmodule ElvenGard.Spatial.InterestGraphTest do
     assert InterestGraph.entity_count(graph) == 0
     assert InterestGraph.observer_count(graph) == 1
   end
+
+  test "synchronizes the complete observer set and skips unchanged viewports" do
+    {graph, _deltas} =
+      InterestGraph.new()
+      |> InterestGraph.put_entities([
+        {:left, AABB.from_circle(0, 0, 5), :players},
+        {:right, AABB.from_circle(500, 0, 5), :players}
+      ])
+
+    {graph, deltas} =
+      InterestGraph.sync_observers(graph, [
+        {:first, AABB.from_circle(0, 0, 50), :players},
+        {:stale, AABB.from_circle(500, 0, 50), :players}
+      ])
+
+    assert deltas.first.current == [:left]
+    assert deltas.stale.current == [:right]
+
+    {same_graph, deltas} =
+      InterestGraph.sync_observers(graph, [
+        {:first, AABB.from_circle(0, 0, 50), :players}
+      ])
+
+    assert deltas.first == %Delta{entered: [], left: [], current: [:left]}
+    assert deltas.stale == %Delta{entered: [], left: [:right], current: []}
+    assert InterestGraph.observer_ids(same_graph) == [:first]
+    assert InterestGraph.recipients(same_graph, :right) == []
+  end
 end

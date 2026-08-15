@@ -77,6 +77,10 @@ serializes a graph per room and accepts the existing `Grid2D.Server` entity
 query/update messages, allowing ECS query sources and indexers to keep using
 the same process without a duplicate entity grid.
 
+Use `InterestGraph.Server.sync_observers/2` to replace the current room
+observer set in one serialized call. Unchanged viewports reuse their existing
+edges, and observers absent from the new set are removed immediately.
+
 ## ECS queries
 
 The optional `elvengard_ecs` integration exposes spatial candidate sources:
