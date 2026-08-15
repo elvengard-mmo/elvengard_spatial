@@ -126,4 +126,31 @@ defmodule ElvenGard.Spatial.InterestGraph.ServerTest do
     assert deltas.second.left == [:right]
     assert InterestServer.observer_ids(server) == [:first]
   end
+
+  test "returns allocation-light observer views for replication" do
+    server =
+      start_supervised!(
+        {InterestServer,
+         initial_entries: [
+           {:left, AABB.from_circle(0, 0, 5), :players},
+           {:right, AABB.from_circle(500, 0, 5), :players}
+         ]}
+      )
+
+    views =
+      InterestServer.sync_observer_views(server, [
+        {:viewer, AABB.from_circle(0, 0, 50), :players}
+      ])
+
+    assert views == %{viewer: MapSet.new([:left])}
+
+    views =
+      InterestServer.sync_observer_views(server, [
+        {:viewer, AABB.from_circle(500, 0, 50), :players}
+      ])
+
+    assert views == %{viewer: MapSet.new([:right])}
+    assert InterestServer.recipients(server, :left) == []
+    assert InterestServer.recipients(server, :right) == [:viewer]
+  end
 end

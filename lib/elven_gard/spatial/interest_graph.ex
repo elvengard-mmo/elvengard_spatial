@@ -50,16 +50,8 @@ defmodule ElvenGard.Spatial.InterestGraph do
   @spec put_entity(t(), id(), AABB.t(), Keyword.t()) :: {t(), Delta.t()}
   def put_entity(%__MODULE__{} = graph, id, %AABB{} = bounds, opts \\ []) do
     layers = opts |> Keyword.get(:layers, []) |> normalize_layers()
-    previous = recipient_set(graph, id)
-
-    graph = %{
-      graph
-      | entity_grid: Grid2D.put(graph.entity_grid, id, bounds, layers: MapSet.to_list(layers)),
-        entity_layers: Map.put(graph.entity_layers, id, layers)
-    }
-
-    current = matching_observers(graph, bounds, layers)
-    {replace_entity_edges(graph, id, previous, current), Delta.new(previous, current)}
+    {graph, previous, current} = put_entity_state(graph, id, bounds, layers)
+    {graph, Delta.new(previous, current)}
   end
 
   @spec put_entities(t(), [entry()]) :: {t(), %{optional(id()) => Delta.t()}}
@@ -95,6 +87,20 @@ defmodule ElvenGard.Spatial.InterestGraph do
     {graph, deltas}
   end
 
+  @spec update_entities(t(), [entry()], [id()]) :: t()
+  def update_entities(%__MODULE__{} = graph, put_entries, deleted_ids)
+      when is_list(put_entries) and is_list(deleted_ids) do
+    graph =
+      Enum.reduce(deleted_ids, graph, fn id, graph ->
+        elem(delete_entity_state(graph, id), 0)
+      end)
+
+    Enum.reduce(put_entries, graph, fn {id, bounds, layers}, graph ->
+      layers = normalize_layers(layers)
+      graph |> put_entity_state(id, bounds, layers) |> elem(0)
+    end)
+  end
+
   @spec replace_entities(t(), [entry()]) :: t()
   def replace_entities(%__MODULE__{} = graph, entries) when is_list(entries) do
     observers =
@@ -111,43 +117,15 @@ defmodule ElvenGard.Spatial.InterestGraph do
 
   @spec delete_entity(t(), id()) :: {t(), Delta.t()}
   def delete_entity(%__MODULE__{} = graph, id) do
-    previous = recipient_set(graph, id)
-
-    subscriptions =
-      Enum.reduce(previous, graph.subscriptions, fn observer_id, subscriptions ->
-        delete_edge(subscriptions, observer_id, id)
-      end)
-
-    graph = %{
-      graph
-      | entity_grid: Grid2D.delete(graph.entity_grid, id),
-        entity_layers: Map.delete(graph.entity_layers, id),
-        subscriptions: subscriptions,
-        recipients: Map.delete(graph.recipients, id)
-    }
-
+    {graph, previous} = delete_entity_state(graph, id)
     {graph, Delta.new(previous, MapSet.new())}
   end
 
   @spec put_observer(t(), id(), AABB.t(), Keyword.t()) :: {t(), Delta.t()}
   def put_observer(%__MODULE__{} = graph, id, %AABB{} = bounds, opts \\ []) do
     layers = opts |> Keyword.get(:layers, []) |> normalize_layers()
-    previous = subscription_set(graph, id)
-
-    case {Grid2D.fetch(graph.observer_grid, id), Map.get(graph.observer_layers, id)} do
-      {{:ok, ^bounds}, ^layers} ->
-        {graph, Delta.new(previous, previous)}
-
-      {_bounds, _layers} ->
-        graph = %{
-          graph
-          | observer_grid: Grid2D.put(graph.observer_grid, id, bounds),
-            observer_layers: Map.put(graph.observer_layers, id, layers)
-        }
-
-        current = matching_entities(graph, bounds, layers)
-        {replace_observer_edges(graph, id, previous, current), Delta.new(previous, current)}
-    end
+    {graph, previous, current} = put_observer_state(graph, id, bounds, layers)
+    {graph, Delta.new(previous, current)}
   end
 
   @spec put_observers(t(), [entry()]) :: {t(), %{optional(id()) => Delta.t()}}
@@ -179,23 +157,29 @@ defmodule ElvenGard.Spatial.InterestGraph do
     {graph, deltas}
   end
 
-  @spec delete_observer(t(), id()) :: {t(), Delta.t()}
-  def delete_observer(%__MODULE__{} = graph, id) do
-    previous = subscription_set(graph, id)
+  @spec sync_observer_views(t(), [entry()]) :: {t(), %{optional(id()) => MapSet.t(id())}}
+  def sync_observer_views(%__MODULE__{} = graph, entries) when is_list(entries) do
+    desired_ids = entries |> MapSet.new(&elem(&1, 0))
+    previous_ids = graph.observer_layers |> Map.keys() |> MapSet.new()
 
-    recipients =
-      Enum.reduce(previous, graph.recipients, fn entity_id, recipients ->
-        delete_edge(recipients, entity_id, id)
+    graph =
+      previous_ids
+      |> MapSet.difference(desired_ids)
+      |> Enum.reduce(graph, fn id, graph -> elem(delete_observer_state(graph, id), 0) end)
+
+    graph =
+      Enum.reduce(entries, graph, fn {id, bounds, layers}, graph ->
+        layers = normalize_layers(layers)
+        graph |> put_observer_state(id, bounds, layers) |> elem(0)
       end)
 
-    graph = %{
-      graph
-      | observer_grid: Grid2D.delete(graph.observer_grid, id),
-        observer_layers: Map.delete(graph.observer_layers, id),
-        subscriptions: Map.delete(graph.subscriptions, id),
-        recipients: recipients
-    }
+    views = Map.new(desired_ids, &{&1, subscription_set(graph, &1)})
+    {graph, views}
+  end
 
+  @spec delete_observer(t(), id()) :: {t(), Delta.t()}
+  def delete_observer(%__MODULE__{} = graph, id) do
+    {graph, previous} = delete_observer_state(graph, id)
     {graph, Delta.new(previous, MapSet.new())}
   end
 
@@ -238,6 +222,76 @@ defmodule ElvenGard.Spatial.InterestGraph do
   end
 
   ## Private functions
+
+  defp put_entity_state(graph, id, bounds, layers) do
+    previous = recipient_set(graph, id)
+
+    graph = %{
+      graph
+      | entity_grid: Grid2D.put(graph.entity_grid, id, bounds, layers: MapSet.to_list(layers)),
+        entity_layers: Map.put(graph.entity_layers, id, layers)
+    }
+
+    current = matching_observers(graph, bounds, layers)
+    {replace_entity_edges(graph, id, previous, current), previous, current}
+  end
+
+  defp delete_entity_state(graph, id) do
+    previous = recipient_set(graph, id)
+
+    subscriptions =
+      Enum.reduce(previous, graph.subscriptions, fn observer_id, subscriptions ->
+        delete_edge(subscriptions, observer_id, id)
+      end)
+
+    graph = %{
+      graph
+      | entity_grid: Grid2D.delete(graph.entity_grid, id),
+        entity_layers: Map.delete(graph.entity_layers, id),
+        subscriptions: subscriptions,
+        recipients: Map.delete(graph.recipients, id)
+    }
+
+    {graph, previous}
+  end
+
+  defp put_observer_state(graph, id, bounds, layers) do
+    previous = subscription_set(graph, id)
+
+    case {Grid2D.fetch(graph.observer_grid, id), Map.get(graph.observer_layers, id)} do
+      {{:ok, ^bounds}, ^layers} ->
+        {graph, previous, previous}
+
+      {_bounds, _layers} ->
+        graph = %{
+          graph
+          | observer_grid: Grid2D.put(graph.observer_grid, id, bounds),
+            observer_layers: Map.put(graph.observer_layers, id, layers)
+        }
+
+        current = matching_entities(graph, bounds, layers)
+        {replace_observer_edges(graph, id, previous, current), previous, current}
+    end
+  end
+
+  defp delete_observer_state(graph, id) do
+    previous = subscription_set(graph, id)
+
+    recipients =
+      Enum.reduce(previous, graph.recipients, fn entity_id, recipients ->
+        delete_edge(recipients, entity_id, id)
+      end)
+
+    graph = %{
+      graph
+      | observer_grid: Grid2D.delete(graph.observer_grid, id),
+        observer_layers: Map.delete(graph.observer_layers, id),
+        subscriptions: Map.delete(graph.subscriptions, id),
+        recipients: recipients
+    }
+
+    {graph, previous}
+  end
 
   defp matching_observers(graph, bounds, entity_layers) do
     graph.observer_grid

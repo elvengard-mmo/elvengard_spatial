@@ -2,7 +2,7 @@
 
 alias ElvenGard.Spatial.{AABB, Grid2D, InterestGraph}
 
-entity_count = String.to_integer(System.get_env("SPATIAL_BENCH_ENTITIES", "1_000"))
+entity_count = String.to_integer(System.get_env("SPATIAL_BENCH_ENTITIES", "1000"))
 observer_count = String.to_integer(System.get_env("SPATIAL_BENCH_OBSERVERS", "100"))
 moved_count = String.to_integer(System.get_env("SPATIAL_BENCH_MOVED", "20"))
 iteration_count = String.to_integer(System.get_env("SPATIAL_BENCH_ITERATIONS", "500"))
@@ -65,7 +65,7 @@ end
     end)
   end)
 
-{incremental_microseconds, graph} =
+{delta_microseconds, delta_graph} =
   :timer.tc(fn ->
     Enum.reduce(1..iteration_count, graph, fn iteration, graph ->
       {graph, _deltas} = InterestGraph.apply_entity_changes(graph, updates.(iteration), [])
@@ -73,9 +73,18 @@ end
     end)
   end)
 
+{incremental_microseconds, graph} =
+  :timer.tc(fn ->
+    Enum.reduce(1..iteration_count, graph, fn iteration, graph ->
+      InterestGraph.update_entities(graph, updates.(iteration), [])
+    end)
+  end)
+
+verify.(baseline_grid, delta_graph)
 verify.(baseline_grid, graph)
 
 baseline_average = baseline_microseconds / iteration_count
+delta_average = delta_microseconds / iteration_count
 incremental_average = incremental_microseconds / iteration_count
 word_size = :erlang.system_info(:wordsize)
 
@@ -94,8 +103,10 @@ Incremental interest graph benchmark
   moved entities per iteration: #{moved_count}
   iterations: #{iteration_count}
   rebuild observer views average: #{Float.round(baseline_average, 2)} µs
-  incremental graph average: #{Float.round(incremental_average, 2)} µs
-  reduction: #{Float.round((1 - incremental_average / baseline_average) * 100, 1)}%
+  incremental graph with deltas average: #{Float.round(delta_average, 2)} µs
+  allocation-light incremental graph average: #{Float.round(incremental_average, 2)} µs
+  reduction versus rebuild: #{Float.round((1 - incremental_average / baseline_average) * 100, 1)}%
+  reduction versus unused deltas: #{Float.round((1 - incremental_average / delta_average) * 100, 1)}%
   baseline grid + observer views memory: #{baseline_memory} bytes
   interest graph memory: #{graph_memory} bytes
 """)
