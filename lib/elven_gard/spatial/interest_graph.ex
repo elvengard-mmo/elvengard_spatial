@@ -12,7 +12,7 @@ defmodule ElvenGard.Spatial.InterestGraph do
   entities crossing cell boundaries.
   """
 
-  alias ElvenGard.Spatial.InterestGraph.Delta
+  alias ElvenGard.Spatial.InterestGraph.{Delta, ViewTransition}
   alias ElvenGard.Spatial.{AABB, Grid2D}
 
   @enforce_keys [:entity_grid, :observer_grid]
@@ -175,6 +175,58 @@ defmodule ElvenGard.Spatial.InterestGraph do
 
     views = Map.new(desired_ids, &{&1, subscription_set(graph, &1)})
     {graph, views}
+  end
+
+  @doc """
+  Applies entity changes and synchronizes observers as one graph transition.
+
+  Each result retains the observer's membership immediately before the whole
+  step and immediately after it. A new observer has a `nil` previous view.
+  MapSets are returned directly so hot replication paths do not allocate or
+  sort transition lists.
+  """
+  @spec transition_observer_views(t(), [entry()], [id()], [entry()]) ::
+          {t(), %{optional(id()) => ViewTransition.t()}}
+  def transition_observer_views(%__MODULE__{} = graph, put_entries, deleted_ids, observers)
+      when is_list(put_entries) and is_list(deleted_ids) and is_list(observers) do
+    desired_ids = observers |> MapSet.new(&elem(&1, 0))
+    previous_ids = graph.observer_layers |> Map.keys() |> MapSet.new()
+    touched_ids = MapSet.union(previous_ids, desired_ids)
+
+    previous_views =
+      Map.new(touched_ids, fn observer_id ->
+        previous =
+          if MapSet.member?(previous_ids, observer_id),
+            do: subscription_set(graph, observer_id)
+
+        {observer_id, previous}
+      end)
+
+    graph = update_entities(graph, put_entries, deleted_ids)
+
+    graph =
+      previous_ids
+      |> MapSet.difference(desired_ids)
+      |> Enum.reduce(graph, fn observer_id, acc ->
+        elem(delete_observer_state(acc, observer_id), 0)
+      end)
+
+    graph =
+      Enum.reduce(observers, graph, fn {observer_id, bounds, layers}, acc ->
+        layers = normalize_layers(layers)
+        acc |> put_observer_state(observer_id, bounds, layers) |> elem(0)
+      end)
+
+    transitions =
+      Map.new(touched_ids, fn observer_id ->
+        {observer_id,
+         %ViewTransition{
+           previous: Map.fetch!(previous_views, observer_id),
+           current: subscription_set(graph, observer_id)
+         }}
+      end)
+
+    {graph, transitions}
   end
 
   @spec delete_observer(t(), id()) :: {t(), Delta.t()}

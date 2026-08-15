@@ -10,6 +10,7 @@ defmodule ElvenGard.Spatial.InterestGraph.Server do
   use GenServer
 
   alias ElvenGard.Spatial.InterestGraph.Delta
+  alias ElvenGard.Spatial.InterestGraph.ViewTransition
   alias ElvenGard.Spatial.{AABB, Grid2D, InterestGraph}
 
   @type query_key :: any()
@@ -46,6 +47,21 @@ defmodule ElvenGard.Spatial.InterestGraph.Server do
           %{optional(InterestGraph.id()) => MapSet.t(InterestGraph.id())}
   def sync_observer_views(server, entries) when is_list(entries) do
     GenServer.call(server, {:sync_observer_views, entries})
+  end
+
+  @doc "Applies entity changes and synchronizes observer views in one serialized graph step."
+  @spec transition_observer_views(
+          GenServer.server(),
+          [InterestGraph.entry()],
+          [InterestGraph.id()],
+          [InterestGraph.entry()]
+        ) :: %{optional(InterestGraph.id()) => ViewTransition.t()}
+  def transition_observer_views(server, put_entries, deleted_ids, observers)
+      when is_list(put_entries) and is_list(deleted_ids) and is_list(observers) do
+    GenServer.call(
+      server,
+      {:transition_observer_views, put_entries, deleted_ids, observers}
+    )
   end
 
   @spec observer_ids(GenServer.server()) :: [InterestGraph.id()]
@@ -174,6 +190,17 @@ defmodule ElvenGard.Spatial.InterestGraph.Server do
   def handle_call({:sync_observer_views, entries}, _from, graph) do
     {graph, views} = InterestGraph.sync_observer_views(graph, entries)
     {:reply, views, graph}
+  end
+
+  def handle_call(
+        {:transition_observer_views, put_entries, deleted_ids, observers},
+        _from,
+        graph
+      ) do
+    {graph, transitions} =
+      InterestGraph.transition_observer_views(graph, put_entries, deleted_ids, observers)
+
+    {:reply, transitions, graph}
   end
 
   def handle_call(:observer_ids, _from, graph) do
