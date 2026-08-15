@@ -52,6 +52,31 @@ maintain the index with `put/4`, `put_many/2`, and `delete/2`.
 `Grid2D.ids/2` and `Grid2D.Server.ids/2` return every indexed identifier,
 optionally restricted with `layers:`, without walking a synthetic world area.
 
+## Incremental area of interest
+
+`ElvenGard.Spatial.InterestGraph` maintains both sides of visibility edges:
+the entities visible to each observer and the observers receiving one entity.
+Moving an item updates only its own candidate edges instead of rebuilding every
+player view:
+
+```elixir
+alias ElvenGard.Spatial.{AABB, InterestGraph}
+
+graph = InterestGraph.new(cell_size: 128)
+{graph, _delta} = InterestGraph.put_observer(graph, :client, AABB.from_circle(0, 0, 500))
+{graph, delta} = InterestGraph.put_entity(graph, :player, AABB.from_circle(100, 0, 24))
+
+delta.entered
+#=> [:client]
+```
+
+Observer filters select entity layers such as `:players` or `:projectiles`.
+`route_swept_circle/5` finds observers intersecting a complete trajectory, so a
+fast projectile cannot disappear between static cells. `InterestGraph.Server`
+serializes a graph per room and accepts the existing `Grid2D.Server` entity
+query/update messages, allowing ECS query sources and indexers to keep using
+the same process without a duplicate entity grid.
+
 ## ECS queries
 
 The optional `elvengard_ecs` integration exposes spatial candidate sources:
@@ -108,6 +133,7 @@ Run the deterministic exhaustive-scan comparison with:
 
 ```shell
 mix run bench/grid_2d.exs
+mix run bench/interest_graph.exs
 ```
 
 The benchmark verifies that every indexed query returns exactly the same AABB
@@ -118,6 +144,8 @@ candidates as a full scan before reporting timings.
 - Entity identifiers are opaque Erlang terms.
 - `Grid2D` updates are immutable and unchanged bounds are no-ops.
 - `Grid2D.Server` serializes mutations around one immutable grid value.
+- `InterestGraph` incrementally maintains reciprocal observer/entity edges.
+- `InterestGraph.Server` is a drop-in superset for `Grid2D.Server` entity operations.
 - Layers only filter broad-phase candidates.
 - Query results use Erlang term ordering for deterministic simulations.
 - Circle and swept-circle queries return AABB candidates and may contain false
