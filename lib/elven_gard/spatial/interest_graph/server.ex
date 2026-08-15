@@ -36,6 +36,17 @@ defmodule ElvenGard.Spatial.InterestGraph.Server do
     GenServer.call(server, {:delete_observer, observer_id})
   end
 
+  @spec sync_observers(GenServer.server(), [InterestGraph.entry()]) ::
+          %{optional(InterestGraph.id()) => Delta.t()}
+  def sync_observers(server, entries) when is_list(entries) do
+    GenServer.call(server, {:sync_observers, entries})
+  end
+
+  @spec observer_ids(GenServer.server()) :: [InterestGraph.id()]
+  def observer_ids(server) do
+    GenServer.call(server, :observer_ids)
+  end
+
   @spec visible_entities(GenServer.server(), InterestGraph.id()) :: [InterestGraph.id()]
   def visible_entities(server, observer_id) do
     GenServer.call(server, {:visible_entities, observer_id})
@@ -146,6 +157,15 @@ defmodule ElvenGard.Spatial.InterestGraph.Server do
   def handle_call({:delete_observer, observer_id}, _from, graph) do
     {graph, delta} = InterestGraph.delete_observer(graph, observer_id)
     {:reply, delta, graph}
+  end
+
+  def handle_call({:sync_observers, entries}, _from, graph) do
+    {graph, deltas} = InterestGraph.sync_observers(graph, entries)
+    {:reply, deltas, graph}
+  end
+
+  def handle_call(:observer_ids, _from, graph) do
+    {:reply, InterestGraph.observer_ids(graph), graph}
   end
 
   def handle_call({:visible_entities, observer_id}, _from, graph) do

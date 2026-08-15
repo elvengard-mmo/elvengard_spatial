@@ -96,4 +96,34 @@ defmodule ElvenGard.Spatial.InterestGraph.ServerTest do
     assert :ok = Grid2D.Server.delete(server, :first)
     assert Grid2D.Server.ids(server) == [:second]
   end
+
+  test "synchronizes and removes server-owned observers in one call" do
+    server =
+      start_supervised!(
+        {InterestServer,
+         initial_entries: [
+           {:left, AABB.from_circle(0, 0, 5), :players},
+           {:right, AABB.from_circle(500, 0, 5), :players}
+         ]}
+      )
+
+    deltas =
+      InterestServer.sync_observers(server, [
+        {:first, AABB.from_circle(0, 0, 50), :players},
+        {:second, AABB.from_circle(500, 0, 50), :players}
+      ])
+
+    assert deltas.first.current == [:left]
+    assert deltas.second.current == [:right]
+    assert InterestServer.observer_ids(server) == [:first, :second]
+
+    deltas =
+      InterestServer.sync_observers(server, [
+        {:first, AABB.from_circle(0, 0, 50), :players}
+      ])
+
+    assert deltas.first == %Delta{entered: [], left: [], current: [:left]}
+    assert deltas.second.left == [:right]
+    assert InterestServer.observer_ids(server) == [:first]
+  end
 end

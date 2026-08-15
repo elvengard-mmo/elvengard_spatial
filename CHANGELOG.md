@@ -12,3 +12,4 @@
 - Add incremental observer/entity interest graphs and deterministic membership deltas.
 - Add swept-trajectory recipient routing across multiple cells.
 - Add a serialized interest-graph server compatible with existing grid entity operations.
+- Add atomic observer-set synchronization with unchanged-viewport reuse.

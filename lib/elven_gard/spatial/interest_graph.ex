@@ -134,14 +134,20 @@ defmodule ElvenGard.Spatial.InterestGraph do
     layers = opts |> Keyword.get(:layers, []) |> normalize_layers()
     previous = subscription_set(graph, id)
 
-    graph = %{
-      graph
-      | observer_grid: Grid2D.put(graph.observer_grid, id, bounds),
-        observer_layers: Map.put(graph.observer_layers, id, layers)
-    }
+    case {Grid2D.fetch(graph.observer_grid, id), Map.get(graph.observer_layers, id)} do
+      {{:ok, ^bounds}, ^layers} ->
+        {graph, Delta.new(previous, previous)}
 
-    current = matching_entities(graph, bounds, layers)
-    {replace_observer_edges(graph, id, previous, current), Delta.new(previous, current)}
+      {_bounds, _layers} ->
+        graph = %{
+          graph
+          | observer_grid: Grid2D.put(graph.observer_grid, id, bounds),
+            observer_layers: Map.put(graph.observer_layers, id, layers)
+        }
+
+        current = matching_entities(graph, bounds, layers)
+        {replace_observer_edges(graph, id, previous, current), Delta.new(previous, current)}
+    end
   end
 
   @spec put_observers(t(), [entry()]) :: {t(), %{optional(id()) => Delta.t()}}
@@ -150,6 +156,27 @@ defmodule ElvenGard.Spatial.InterestGraph do
       {graph, delta} = put_observer(graph, id, bounds, layers: layers)
       {graph, Map.put(deltas, id, delta)}
     end)
+  end
+
+  @spec sync_observers(t(), [entry()]) :: {t(), %{optional(id()) => Delta.t()}}
+  def sync_observers(%__MODULE__{} = graph, entries) when is_list(entries) do
+    desired_ids = entries |> MapSet.new(&elem(&1, 0))
+    previous_ids = graph.observer_layers |> Map.keys() |> MapSet.new()
+    deleted_ids = MapSet.difference(previous_ids, desired_ids)
+    touched_ids = MapSet.union(previous_ids, desired_ids)
+    previous = Map.new(touched_ids, &{&1, subscription_set(graph, &1)})
+
+    graph =
+      deleted_ids
+      |> Enum.reduce(graph, fn id, graph -> elem(delete_observer(graph, id), 0) end)
+      |> then(fn graph -> elem(put_observers(graph, entries), 0) end)
+
+    deltas =
+      Map.new(touched_ids, fn id ->
+        {id, Delta.new(Map.fetch!(previous, id), subscription_set(graph, id))}
+      end)
+
+    {graph, deltas}
   end
 
   @spec delete_observer(t(), id()) :: {t(), Delta.t()}
@@ -204,6 +231,11 @@ defmodule ElvenGard.Spatial.InterestGraph do
 
   @spec observer_count(t()) :: non_neg_integer()
   def observer_count(%__MODULE__{} = graph), do: Grid2D.size(graph.observer_grid)
+
+  @spec observer_ids(t()) :: [id()]
+  def observer_ids(%__MODULE__{} = graph) do
+    graph.observer_layers |> Map.keys() |> Enum.sort()
+  end
 
   ## Private functions
 
